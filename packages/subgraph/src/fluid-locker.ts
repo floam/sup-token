@@ -19,6 +19,7 @@ import {
   LiquidityPositionBurned as LiquidityPositionBurnedEvent,
   FluidUnlocked as FluidUnlockedEvent
 } from "../generated/templates/FluidLocker/FluidLocker";
+import { Fontaine as FontaineContract } from "../generated/templates/FluidLocker/Fontaine";
 import { INonfungiblePositionManager } from "../generated/templates/FluidLocker/INonfungiblePositionManager";
 import { IUniswapV3Pool } from "../generated/templates/FluidLocker/IUniswapV3Pool";
 import { getUniV3ETHxSUPPoolAddress, getUniV3PositionManagerAddress } from "./addresses";
@@ -135,7 +136,6 @@ function updateStakerCounts(
     // Becoming active
     stats.activeStakerCount = stats.activeStakerCount.plus(BigInt.fromI32(1));
   } else if (wasActive && !isActive) {
-    // Becoming inactive
     stats.activeStakerCount = stats.activeStakerCount.minus(BigInt.fromI32(1));
   }
 
@@ -294,7 +294,7 @@ export function handleLiquidityPositionBurned(event: LiquidityPositionBurnedEven
     position.burnedBlock = event.block.number;
     position.burnedTx = event.transaction.hash;
 
-    // Calculate collected amounts using stored liquidity and current pool price
+    // Calculate collected amounts using stored liquidity and current price
     let poolAddress = getUniV3ETHxSUPPoolAddress();
     let pool = IUniswapV3Pool.bind(poolAddress);
     let slot0 = pool.slot0();
@@ -350,9 +350,9 @@ export function handleFluidUnlocked(event: FluidUnlockedEvent): void {
     fontaine.unlockPeriod = event.params.unlockPeriod;
     fontaine.unlockAmount = event.params.availableBalance;
     
-    // Calculate flow rate: unlockAmount / unlockPeriod
-    const flowRate = event.params.availableBalance.div(event.params.unlockPeriod);
-    fontaine.unlockFlowRate = flowRate;
+    // The event amount is gross; the Fontaine stores the actual post-penalty flow rate.
+    const fontaineContract = FontaineContract.bind(event.params.fontaine);
+    fontaine.unlockFlowRate = fontaineContract.unlockFlowRate();
     
     // Calculate end date: current timestamp + unlock period
     const endDate = event.block.timestamp.plus(event.params.unlockPeriod);
